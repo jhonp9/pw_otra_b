@@ -1,11 +1,14 @@
-// jhonp9/pw_otra_b/pw_otra_b-c8de98761eeb42f17684ef7afe1da3d572434c70/src/controladores/shopController.ts
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
-import { calcularNuevoNivel } from './userController'; // Importar helper
+import { calcularNuevoNivel } from './userController'; 
 
 export const getRegalos = async (req: Request, res: Response) => {
-    const regalos = await prisma.regalo.findMany();
-    res.json(regalos);
+    try {
+        const regalos = await prisma.regalo.findMany();
+        res.json(regalos);
+    } catch (e) {
+        res.status(500).json({ error: 'Error al obtener regalos' });
+    }
 };
 
 export const crearRegalo = async (req: Request, res: Response) => {
@@ -22,8 +25,12 @@ export const crearRegalo = async (req: Request, res: Response) => {
 
 export const eliminarRegalo = async (req: Request, res: Response) => {
     const { id } = req.params;
-    await prisma.regalo.delete({ where: { id: Number(id) } });
-    res.json({ msg: 'Regalo eliminado' });
+    try {
+        await prisma.regalo.delete({ where: { id: Number(id) } });
+        res.json({ msg: 'Regalo eliminado' });
+    } catch (e) {
+        res.status(500).json({ msg: 'Error eliminando regalo' });
+    }
 };
 
 export const comprarMonedas = async (req: Request, res: Response) => {
@@ -53,6 +60,7 @@ export const enviarRegalo = async (req: Request, res: Response) => {
         if (!viewer || !regalo) return res.status(404).json({ msg: 'Datos incorrectos' });
         if (viewer.monedas < regalo.costo) return res.status(400).json({ msg: 'Saldo insuficiente' });
 
+        // 1. Descontar monedas y sumar XP al espectador
         const updatedUser = await prisma.usuario.update({
             where: { id: viewerId },
             data: {
@@ -61,7 +69,7 @@ export const enviarRegalo = async (req: Request, res: Response) => {
             }
         });
 
-        // Lógica de nivel personalizada
+        // 2. Calcular si el espectador sube de nivel (usando config del streamer)
         const configNiveles = streamer?.configNiveles || "{}";
         const nuevoNivel = calcularNuevoNivel(updatedUser.puntosXP, viewer.nivelEspectador, configNiveles);
         
@@ -74,7 +82,7 @@ export const enviarRegalo = async (req: Request, res: Response) => {
             subioNivel = true;
         }
 
-        // Registrar transacción para overlay del streamer
+        // 3. Registrar transacción (IMPORTANTE: Guardar destinatarioId para el overlay)
         await prisma.transaccion.create({
             data: { 
                 usuarioId: viewerId, 
@@ -88,28 +96,32 @@ export const enviarRegalo = async (req: Request, res: Response) => {
         res.json({ success: true, monedas: updatedUser.monedas, xp: updatedUser.puntosXP, subioNivel, nivel: nuevoNivel });
 
     } catch (error) {
-        console.log(error)
+        console.error(error);
         res.status(500).json({ msg: 'Error enviando regalo' });
     }
 };
 
+// Endpoint para que el Streamer consulte si recibió regalos recientemente
 export const getMisEventos = async (req: Request, res: Response) => {
-    const { userId } = req.body; 
+    const { userId } = req.body; // Viene del token (es el ID del streamer logueado)
     const { since } = req.query; 
 
     try {
+        const fechaCorte = new Date(Number(since) || Date.now() - 10000); // Default últimos 10s si no hay timestamp
+
         const eventos = await prisma.transaccion.findMany({
             where: {
-                destinatarioId: userId,
+                destinatarioId: Number(userId), // Buscar transacciones dirigidas a mí
                 tipo: 'envio_regalo',
                 fecha: {
-                    gt: new Date(Number(since) || Date.now() - 5000) 
+                    gt: fechaCorte // Mayores que la fecha de corte
                 }
             },
             orderBy: { fecha: 'asc' }
         });
         res.json(eventos);
     } catch (error) {
+        console.error("Error fetching events:", error);
         res.status(500).json([]);
     }
 }
