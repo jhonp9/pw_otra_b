@@ -71,3 +71,20 @@ export const stopStream = async (req: Request, res: Response) => {
         res.status(500).json({ msg: 'Error deteniendo stream' });
     }
 };
+export const getStreamStatus = async (req: Request, res: Response) => {
+    const { userId } = req.params; // ID del streamer (dueño del canal)
+    
+    // Buscamos si este usuario tiene un stream con estaEnVivo = true
+    const stream = await prisma.stream.findFirst({
+        where: { 
+            usuarioId: Number(userId),
+            estaEnVivo: true 
+        }
+    });
+
+    if (stream) {
+        res.json({ isLive: true, streamId: stream.id, titulo: stream.titulo });
+    } else {
+        res.json({ isLive: false });
+    }
+};

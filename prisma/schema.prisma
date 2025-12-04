@@ -61,3 +61,13 @@ model Transaccion {
   usuario         Usuario  @relation("Emisor", fields: [usuarioId], references: [id])
   destinatario    Usuario? @relation("Receptor", fields: [destinatarioId], references: [id])
 }
+model Mensaje {
+  id            Int      @id @default(autoincrement())
+  contenido     String
+  usuarioId     Int
+  usuarioNombre String
+  nivelUsuario  Int      // Guardamos el nivel que tenía al escribir
+  rolUsuario    String
+  streamId      Int      // ID del dueño del canal (Usuario ID del streamer)
+  fecha         DateTime @default(now())
+}
