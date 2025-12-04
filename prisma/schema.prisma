@@ -1,3 +1,5 @@
+// jhonp9/pw_otra_b/pw_otra_b-c8de98761eeb42f17684ef7afe1da3d572434c70/prisma/schema.prisma
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -16,7 +18,11 @@ model Usuario {
   monedas         Int       @default(100) 
   puntosXP        Int       @default(0)
   nivelEspectador Int       @default(1)
-  metaXp          Int       @default(1000)
+  
+  // CAMBIO: configNiveles guardará un JSON string tipo {"2": 500, "3": 1500}
+  configNiveles   String    @default("{}") 
+  metaXp          Int       @default(1000) // Se mantiene como fallback o base lineal
+
   horasStream     Float     @default(0.0)
   nivelStreamer   Int       @default(1)
   
@@ -35,8 +41,6 @@ model Stream {
   fin         DateTime?
   usuarioId   Int
   usuario     Usuario   @relation(fields: [usuarioId], references: [id])
-  
-  // Relación inversa para mensajes
   mensajes    Mensaje[] 
 }
 
@@ -52,8 +56,8 @@ model Regalo {
 
 model Transaccion {
   id              Int      @id @default(autoincrement())
-  usuarioId       Int      // El que gasta/envía
-  destinatarioId  Int?     // El que recibe
+  usuarioId       Int      
+  destinatarioId  Int?
   monto           Int
   tipo            String   
   detalle         String?
@@ -70,10 +74,7 @@ model Mensaje {
   usuarioNombre String
   nivelUsuario  Int
   rolUsuario    String
-  
-  // CAMBIO CLAVE: Relación estricta con Stream
   streamId      Int
   stream        Stream   @relation(fields: [streamId], references: [id], onDelete: Cascade)
-  
   fecha         DateTime @default(now())
 }
