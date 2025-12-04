@@ -1,5 +1,3 @@
-// jhonp9/pw_otra_b/pw_otra_b-eb410fb86ee1e2f99aeca94d5e7031bc09cf3d3a/prisma/schema.prisma
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -25,7 +23,7 @@ model Usuario {
   streams         Stream[]
   regalosPropios  Regalo[]  
   transacciones   Transaccion[] @relation("Emisor")
-  recibidos       Transaccion[] @relation("Receptor") // Relación inversa añadida
+  recibidos       Transaccion[] @relation("Receptor")
 }
 
 model Stream {
@@ -37,6 +35,9 @@ model Stream {
   fin         DateTime?
   usuarioId   Int
   usuario     Usuario   @relation(fields: [usuarioId], references: [id])
+  
+  // Relación inversa para mensajes
+  mensajes    Mensaje[] 
 }
 
 model Regalo {
@@ -52,7 +53,7 @@ model Regalo {
 model Transaccion {
   id              Int      @id @default(autoincrement())
   usuarioId       Int      // El que gasta/envía
-  destinatarioId  Int?     // El que recibe (Nuevo campo opcional)
+  destinatarioId  Int?     // El que recibe
   monto           Int
   tipo            String   
   detalle         String?
@@ -61,13 +62,18 @@ model Transaccion {
   usuario         Usuario  @relation("Emisor", fields: [usuarioId], references: [id])
   destinatario    Usuario? @relation("Receptor", fields: [destinatarioId], references: [id])
 }
+
 model Mensaje {
   id            Int      @id @default(autoincrement())
   contenido     String
   usuarioId     Int
   usuarioNombre String
-  nivelUsuario  Int      // Guardamos el nivel que tenía al escribir
+  nivelUsuario  Int
   rolUsuario    String
-  streamId      Int      // ID del dueño del canal (Usuario ID del streamer)
+  
+  // CAMBIO CLAVE: Relación estricta con Stream
+  streamId      Int
+  stream        Stream   @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  
   fecha         DateTime @default(now())
 }
