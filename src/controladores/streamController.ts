@@ -1,11 +1,11 @@
+// jhonp9/pw_otra_b/pw_otra_b-c8de98761eeb42f17684ef7afe1da3d572434c70/src/controladores/streamController.ts
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 
 export const getStreams = async (req: Request, res: Response) => {
-    // Solo devolvemos los que están realmente en vivo
     const streamsActivos = await prisma.stream.findMany({
         where: { estaEnVivo: true },
-        include: { usuario: { select: { id: true, nombre: true, nivelStreamer: true } } } // Incluimos ID para el link
+        include: { usuario: { select: { id: true, nombre: true, nivelStreamer: true } } }
     });
     res.json(streamsActivos);
 };
@@ -13,7 +13,6 @@ export const getStreams = async (req: Request, res: Response) => {
 export const startStream = async (req: Request, res: Response) => {
     const { userId, titulo, categoria } = req.body;
     try {
-        // Asegurar que cerramos streams huerfanos anteriores si existen
         await prisma.stream.updateMany({
             where: { usuarioId: Number(userId), estaEnVivo: true },
             data: { estaEnVivo: false, fin: new Date() }
@@ -42,7 +41,6 @@ export const stopStream = async (req: Request, res: Response) => {
 
         const fin = new Date();
         const inicio = new Date(stream.inicio);
-        // Calculo en horas con decimales
         const duracionHoras = (fin.getTime() - inicio.getTime()) / (1000 * 60 * 60);
 
         await prisma.stream.update({
@@ -50,14 +48,14 @@ export const stopStream = async (req: Request, res: Response) => {
             data: { estaEnVivo: false, fin }
         });
 
-        // Actualizar horas del streamer
         const user = await prisma.usuario.update({
             where: { id: Number(userId) },
             data: { horasStream: { increment: duracionHoras } }
         });
 
-        // Lógica de Nivel Streamer: Sube cada 10 horas acumuladas
-        const nuevoNivel = Math.floor(user.horasStream / 10) + 1;
+        // CAMBIO REQUERIDO: Nivel sube cada 0.01 horas
+        const dificultadHoras = 0.01; 
+        const nuevoNivel = Math.floor(user.horasStream / dificultadHoras) + 1;
         let subioNivel = false;
 
         if (nuevoNivel > user.nivelStreamer) {
