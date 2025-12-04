@@ -1,11 +1,10 @@
 // backend/src/controladores/streamController.ts
-
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 
-// Constantes para el tiempo
-const SEGUNDOS_PULSE = 30;
-const INCREMENTO_HORAS = SEGUNDOS_PULSE / 3600; // 0.008333...
+// CAMBIO: Intervalo más corto (10 segundos) para mayor precisión
+const SEGUNDOS_PULSE = 10;
+const INCREMENTO_HORAS = SEGUNDOS_PULSE / 3600; // 0.002777... horas
 
 export const getStreams = async (req: Request, res: Response) => {
     const streamsActivos = await prisma.stream.findMany({
@@ -18,6 +17,7 @@ export const getStreams = async (req: Request, res: Response) => {
 export const startStream = async (req: Request, res: Response) => {
     const { userId, titulo, categoria } = req.body;
     try {
+        // Cerrar streams anteriores colgados
         await prisma.stream.updateMany({
             where: { usuarioId: Number(userId), estaEnVivo: true },
             data: { estaEnVivo: false, fin: new Date() }
@@ -29,34 +29,33 @@ export const startStream = async (req: Request, res: Response) => {
                 titulo,
                 categoria: categoria || 'General',
                 estaEnVivo: true,
-                inicio: new Date()
+                inicio: new Date() // Se guarda la hora exacta de inicio
             }
         });
-        res.json({ msg: 'Stream iniciado', streamId: stream.id });
+        // Devolvemos la fecha de inicio para el cronómetro del frontend
+        res.json({ msg: 'Stream iniciado', streamId: stream.id, inicio: stream.inicio });
     } catch (error) {
         res.status(500).json({ msg: 'Error iniciando stream' });
     }
 };
 
-// Se llama cada 30 segundos desde el frontend
 export const pulseStream = async (req: Request, res: Response) => {
     const { userId, streamId } = req.body;
     try {
         const stream = await prisma.stream.findUnique({ where: { id: Number(streamId) } });
         if (!stream || !stream.estaEnVivo) return res.status(400).json({ msg: 'Stream inactivo' });
 
-        // Actualizamos las horas
+        // Sumar el incremento pequeño al TOTAL acumulado del usuario
         const user = await prisma.usuario.update({
             where: { id: Number(userId) },
             data: { horasStream: { increment: INCREMENTO_HORAS } }
         });
 
-        // Lógica de Nivel Streamer: Sube cada 30 segundos (INCREMENTO_HORAS)
-        // Fórmula: (Horas Totales / Horas por Nivel) + 1
-        // Usamos Math.floor para obtener el nivel entero.
-        const nuevoNivel = Math.floor(user.horasStream / INCREMENTO_HORAS) + 1;
+        // REGLA: Subir de nivel cada 0.01 horas (36 segundos aprox) acumuladas
+        const META_HORAS_NIVEL = 0.01;
+        const nuevoNivel = Math.floor(user.horasStream / META_HORAS_NIVEL) + 1;
+        
         let subioNivel = false;
-
         if (nuevoNivel > user.nivelStreamer) {
             await prisma.usuario.update({
                 where: { id: Number(userId) },
@@ -67,6 +66,7 @@ export const pulseStream = async (req: Request, res: Response) => {
 
         res.json({ ok: true, horas: user.horasStream, subioNivel, nivel: nuevoNivel });
     } catch (error) {
+        console.error(error);
         res.status(500).json({ msg: 'Error en pulse' });
     }
 };
@@ -90,7 +90,8 @@ export const getStreamStatus = async (req: Request, res: Response) => {
         where: { usuarioId: Number(userId), estaEnVivo: true }
     });
     if (stream) {
-        res.json({ isLive: true, streamId: stream.id, titulo: stream.titulo });
+        // IMPORTANTE: Devolver 'inicio' para calcular el cronómetro de sesión
+        res.json({ isLive: true, streamId: stream.id, titulo: stream.titulo, inicio: stream.inicio });
     } else {
         res.json({ isLive: false });
     }
