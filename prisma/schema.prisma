@@ -18,6 +18,7 @@ model Usuario {
   monedas         Int       @default(100) 
   puntosXP        Int       @default(0)
   nivelEspectador Int       @default(1)
+  metaXp          Int       @default(1000)
   horasStream     Float     @default(0.0)
   nivelStreamer   Int       @default(1)
   streams         Stream[]
