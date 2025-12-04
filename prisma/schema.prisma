@@ -1,4 +1,4 @@
-// backend/prisma/schema.prisma
+// jhonp9/pw_otra_b/pw_otra_b-eb410fb86ee1e2f99aeca94d5e7031bc09cf3d3a/prisma/schema.prisma
 
 generator client {
   provider = "prisma-client-js"
@@ -21,9 +21,11 @@ model Usuario {
   metaXp          Int       @default(1000)
   horasStream     Float     @default(0.0)
   nivelStreamer   Int       @default(1)
+  
   streams         Stream[]
   regalosPropios  Regalo[]  
-  transacciones   Transaccion[]
+  transacciones   Transaccion[] @relation("Emisor")
+  recibidos       Transaccion[] @relation("Receptor") // Relación inversa añadida
 }
 
 model Stream {
@@ -48,11 +50,14 @@ model Regalo {
 }
 
 model Transaccion {
-  id          Int      @id @default(autoincrement())
-  usuarioId   Int
-  monto       Int
-  tipo        String   
-  detalle     String?
-  fecha       DateTime @default(now())
-  usuario     Usuario  @relation(fields: [usuarioId], references: [id])
+  id              Int      @id @default(autoincrement())
+  usuarioId       Int      // El que gasta/envía
+  destinatarioId  Int?     // El que recibe (Nuevo campo opcional)
+  monto           Int
+  tipo            String   
+  detalle         String?
+  fecha           DateTime @default(now())
+  
+  usuario         Usuario  @relation("Emisor", fields: [usuarioId], references: [id])
+  destinatario    Usuario? @relation("Receptor", fields: [destinatarioId], references: [id])
 }

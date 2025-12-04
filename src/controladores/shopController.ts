@@ -1,7 +1,7 @@
+// jhonp9/pw_otra_b/pw_otra_b-eb410fb86ee1e2f99aeca94d5e7031bc09cf3d3a/src/controladores/shopController.ts
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 
-// Obtener regalos (Globales + del Streamer específico si se pide)
 export const getRegalos = async (req: Request, res: Response) => {
     const regalos = await prisma.regalo.findMany();
     res.json(regalos);
@@ -43,8 +43,9 @@ export const comprarMonedas = async (req: Request, res: Response) => {
     }
 };
 
+// REQ 19: Enviar regalo ahora registra destinatario para el overlay
 export const enviarRegalo = async (req: Request, res: Response) => {
-    const { viewerId, regaloId } = req.body;
+    const { viewerId, regaloId, streamerId } = req.body; // <--- Añadimos streamerId
 
     try {
         const viewer = await prisma.usuario.findUnique({ where: { id: viewerId } });
@@ -62,7 +63,7 @@ export const enviarRegalo = async (req: Request, res: Response) => {
             }
         });
 
-        // Calcular Nivel Espectador (Ej: cada 1000 XP sube nivel)
+        // Calcular Nivel Espectador
         const nuevoNivel = Math.floor(updatedUser.puntosXP / 1000) + 1;
         let subioNivel = false;
         
@@ -74,18 +75,43 @@ export const enviarRegalo = async (req: Request, res: Response) => {
             subioNivel = true;
         }
 
+        // Registrar transacción con destinatario (Streamer)
         await prisma.transaccion.create({
             data: { 
                 usuarioId: viewerId, 
+                destinatarioId: streamerId ? Number(streamerId) : null, // <--- Importante
                 monto: -regalo.costo, 
                 tipo: 'envio_regalo', 
-                detalle: `Regalo: ${regalo.nombre}` 
+                detalle: `${viewer.nombre} envió ${regalo.nombre} ${regalo.icono}` 
             }
         });
 
         res.json({ success: true, monedas: updatedUser.monedas, xp: updatedUser.puntosXP, subioNivel, nivel: nuevoNivel });
 
     } catch (error) {
+        console.log(error)
         res.status(500).json({ msg: 'Error enviando regalo' });
     }
 };
+
+// REQ 20: Polling para Overlay del Streamer
+export const getMisEventos = async (req: Request, res: Response) => {
+    const { userId } = req.body; // Viene del token middleware
+    const { since } = req.query; // Timestamp
+
+    try {
+        const eventos = await prisma.transaccion.findMany({
+            where: {
+                destinatarioId: userId,
+                tipo: 'envio_regalo',
+                fecha: {
+                    gt: new Date(Number(since)) // Buscar eventos después de X fecha
+                }
+            },
+            orderBy: { fecha: 'asc' }
+        });
+        res.json(eventos);
+    } catch (error) {
+        res.status(500).json([]);
+    }
+}
