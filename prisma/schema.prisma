@@ -1,0 +1,61 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Usuario {
+  id              Int       @id @default(autoincrement())
+  nombre          String
+  email           String    @unique
+  password        String
+  rol             String    
+  monedas         Int       @default(100) 
+  puntosXP        Int       @default(0)
+  nivelEspectador Int       @default(1)
+  horasStream     Float     @default(0.0)
+  nivelStreamer   Int       @default(1)
+  streams         Stream[]
+  regalosPropios  Regalo[]  
+  transacciones   Transaccion[]
+}
+
+model Stream {
+  id          Int       @id @default(autoincrement())
+  titulo      String
+  categoria   String
+  estaEnVivo  Boolean   @default(false)
+  inicio      DateTime?
+  fin         DateTime?
+  usuarioId   Int
+  usuario     Usuario   @relation(fields: [usuarioId], references: [id])
+}
+
+model Regalo {
+  id          Int     @id @default(autoincrement())
+  nombre      String
+  icono       String
+  costo       Int
+  puntos      Int
+  streamerId  Int?    
+  streamer    Usuario? @relation(fields: [streamerId], references: [id])
+}
+
+model Transaccion {
+  id          Int      @id @default(autoincrement())
+  usuarioId   Int
+  monto       Int
+  tipo        String   
+  detalle     String?
+  fecha       DateTime @default(now())
+  usuario     Usuario  @relation(fields: [usuarioId], references: [id])
+}
