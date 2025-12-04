@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Stream" ADD COLUMN     "tiempoAcumulado" DOUBLE PRECISION NOT NULL DEFAULT 0.0;

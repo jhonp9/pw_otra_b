@@ -33,15 +33,19 @@ model Usuario {
 }
 
 model Stream {
-  id          Int       @id @default(autoincrement())
-  titulo      String
-  categoria   String
-  estaEnVivo  Boolean   @default(false)
-  inicio      DateTime?
-  fin         DateTime?
-  usuarioId   Int
-  usuario     Usuario   @relation(fields: [usuarioId], references: [id])
-  mensajes    Mensaje[] 
+  id              Int       @id @default(autoincrement())
+  titulo          String
+  categoria       String
+  estaEnVivo      Boolean   @default(false)
+  inicio          DateTime?
+  fin             DateTime?
+  usuarioId       Int
+  
+  // NUEVO CAMPO: Para saber cuánto tiempo hemos sumado ya con los "pulsos"
+  tiempoAcumulado Float     @default(0.0) 
+
+  usuario         Usuario   @relation(fields: [usuarioId], references: [id])
+  mensajes        Mensaje[] 
 }
 
 model Regalo {
