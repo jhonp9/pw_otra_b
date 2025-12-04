@@ -103,18 +103,22 @@ export const enviarRegalo = async (req: Request, res: Response) => {
 
 // Endpoint para que el Streamer consulte si recibió regalos recientemente
 export const getMisEventos = async (req: Request, res: Response) => {
-    const { userId } = req.body; // Viene del token (es el ID del streamer logueado)
+    const { userId } = req.body; 
     const { since } = req.query; 
 
     try {
-        const fechaCorte = new Date(Number(since) || Date.now() - 10000); // Default últimos 10s si no hay timestamp
+        // Usamos un fallback seguro: si no envían 'since', buscamos eventos de los últimos 5 segundos
+        const timestamp = Number(since);
+        const fechaCorte = (!isNaN(timestamp) && timestamp > 0) 
+            ? new Date(timestamp) 
+            : new Date(Date.now() - 5000);
 
         const eventos = await prisma.transaccion.findMany({
             where: {
-                destinatarioId: Number(userId), // Buscar transacciones dirigidas a mí
+                destinatarioId: Number(userId),
                 tipo: 'envio_regalo',
                 fecha: {
-                    gt: fechaCorte // Mayores que la fecha de corte
+                    gt: fechaCorte 
                 }
             },
             orderBy: { fecha: 'asc' }
