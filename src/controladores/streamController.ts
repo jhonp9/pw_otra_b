@@ -2,30 +2,28 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 
 export const getStreams = async (req: Request, res: Response) => {
-    // Obtener streamers (usuarios con rol streamer)
-    // En un caso real filtraríamos por 'estaEnVivo: true' en la tabla Stream
-    const streamers = await prisma.usuario.findMany({
-        where: { rol: 'streamer' },
-        select: { id: true, nombre: true, nivelStreamer: true, horasStream: true }
-    });
-    
-    // Para simplificar, asumimos que si tienen un registro en Stream con estaEnVivo=true, están live
+    // Solo devolvemos los que están realmente en vivo
     const streamsActivos = await prisma.stream.findMany({
         where: { estaEnVivo: true },
-        include: { usuario: { select: { nombre: true, nivelStreamer: true } } }
+        include: { usuario: { select: { id: true, nombre: true, nivelStreamer: true } } } // Incluimos ID para el link
     });
-
     res.json(streamsActivos);
 };
 
 export const startStream = async (req: Request, res: Response) => {
     const { userId, titulo, categoria } = req.body;
     try {
+        // Asegurar que cerramos streams huerfanos anteriores si existen
+        await prisma.stream.updateMany({
+            where: { usuarioId: Number(userId), estaEnVivo: true },
+            data: { estaEnVivo: false, fin: new Date() }
+        });
+
         const stream = await prisma.stream.create({
             data: {
-                usuarioId: userId,
+                usuarioId: Number(userId),
                 titulo,
-                categoria,
+                categoria: categoria || 'General',
                 estaEnVivo: true,
                 inicio: new Date()
             }
@@ -39,42 +37,47 @@ export const startStream = async (req: Request, res: Response) => {
 export const stopStream = async (req: Request, res: Response) => {
     const { userId, streamId } = req.body;
     try {
-        const stream = await prisma.stream.findUnique({ where: { id: streamId } });
+        const stream = await prisma.stream.findUnique({ where: { id: Number(streamId) } });
         if (!stream || !stream.inicio) return res.status(400).json({ msg: 'Stream no válido' });
 
         const fin = new Date();
-        const duracionHoras = (fin.getTime() - new Date(stream.inicio).getTime()) / (1000 * 60 * 60);
+        const inicio = new Date(stream.inicio);
+        // Calculo en horas con decimales
+        const duracionHoras = (fin.getTime() - inicio.getTime()) / (1000 * 60 * 60);
 
         await prisma.stream.update({
-            where: { id: streamId },
+            where: { id: Number(streamId) },
             data: { estaEnVivo: false, fin }
         });
 
         // Actualizar horas del streamer
         const user = await prisma.usuario.update({
-            where: { id: userId },
+            where: { id: Number(userId) },
             data: { horasStream: { increment: duracionHoras } }
         });
 
-        // Lógica de Nivel Streamer (Ejemplo: cada 10 horas sube nivel)
+        // Lógica de Nivel Streamer: Sube cada 10 horas acumuladas
         const nuevoNivel = Math.floor(user.horasStream / 10) + 1;
+        let subioNivel = false;
+
         if (nuevoNivel > user.nivelStreamer) {
             await prisma.usuario.update({
-                where: { id: userId },
+                where: { id: Number(userId) },
                 data: { nivelStreamer: nuevoNivel }
             });
-            return res.json({ msg: 'Stream finalizado', horas: user.horasStream, subioNivel: true, nivel: nuevoNivel });
+            subioNivel = true;
         }
 
-        res.json({ msg: 'Stream finalizado', horas: user.horasStream, subioNivel: false });
+        res.json({ msg: 'Stream finalizado', horas: user.horasStream, subioNivel, nivel: nuevoNivel });
     } catch (error) {
+        console.log(error);
         res.status(500).json({ msg: 'Error deteniendo stream' });
     }
 };
+
 export const getStreamStatus = async (req: Request, res: Response) => {
-    const { userId } = req.params; // ID del streamer (dueño del canal)
+    const { userId } = req.params;
     
-    // Buscamos si este usuario tiene un stream con estaEnVivo = true
     const stream = await prisma.stream.findFirst({
         where: { 
             usuarioId: Number(userId),

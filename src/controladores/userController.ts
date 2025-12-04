@@ -3,6 +3,8 @@ import { prisma } from '../../db';
 
 export const getUser = async (req: Request, res: Response) => {
     const { id } = req.params;
+    if (!id || isNaN(Number(id))) return res.status(400).json({ msg: 'ID inválido' });
+
     const user = await prisma.usuario.findUnique({ where: { id: Number(id) } });
     if(user) {
         const { password, ...resto } = user;
@@ -12,12 +14,11 @@ export const getUser = async (req: Request, res: Response) => {
     }
 };
 
-// REQ 22: Endpoint para actualizar configuración del usuario (Streamer cambia la meta)
 export const updateConfig = async (req: Request, res: Response) => {
     const { userId, metaXp } = req.body;
     try {
         await prisma.usuario.update({
-            where: { id: userId },
+            where: { id: Number(userId) },
             data: { metaXp: Number(metaXp) }
         });
         res.json({ msg: 'Configuración actualizada', metaXp });
@@ -26,33 +27,39 @@ export const updateConfig = async (req: Request, res: Response) => {
     }
 };
 
+// REQ 11: Solución del Bug de XP por Chat
 export const addChatXp = async (req: Request, res: Response) => {
-    // Recibimos userId y opcionalmente la metaXp del canal actual
     const { userId, currentMetaXp } = req.body; 
     
-    // Si no envían meta, usamos 1000 por defecto
-    const meta = currentMetaXp || 1000; 
+    // Validación y conversión forzada de tipos
+    const idUsuario = Number(userId);
+    const meta = Number(currentMetaXp) || 1000; 
+
+    if (!idUsuario || isNaN(idUsuario)) {
+        return res.status(400).json({ error: 'ID de usuario inválido' });
+    }
 
     try {
-        const user = await prisma.usuario.findUnique({ where: { id: userId } });
+        const user = await prisma.usuario.findUnique({ where: { id: idUsuario } });
         
         if (!user) {
             return res.status(404).json({ error: 'Usuario no encontrado' });
         }
         
-        // REQ 11: Sumar 1 punto por mensaje
+        // Sumar 1 punto por mensaje
         const updatedUser = await prisma.usuario.update({
-            where: { id: userId },
+            where: { id: idUsuario },
             data: { puntosXP: { increment: 1 } }
         });
         
-        // REQ 12 & 22: Calcular nivel basado en la meta dinámica
+        // Calcular nivel basado en la meta dinámica del streamer actual
         const nuevoNivel = Math.floor(updatedUser.puntosXP / meta) + 1;
         let subioNivel = false;
 
+        // Si el nuevo nivel calculado es mayor al que tiene guardado, actualizamos
         if (nuevoNivel > user.nivelEspectador) {
             await prisma.usuario.update({
-                where: { id: userId },
+                where: { id: idUsuario },
                 data: { nivelEspectador: nuevoNivel }
             });
             subioNivel = true;
@@ -60,6 +67,7 @@ export const addChatXp = async (req: Request, res: Response) => {
 
         res.json({ ok: true, xp: updatedUser.puntosXP, nivel: nuevoNivel, subioNivel });
     } catch(e) {
-        res.status(500).json({ error: 'Error XP' });
+        console.error("Error sumando XP:", e);
+        res.status(500).json({ error: 'Error interno al sumar XP' });
     }
 };
