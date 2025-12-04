@@ -1,18 +1,17 @@
 // backend/prisma/seed.ts
 
-import { PrismaClient } from '@prisma/client/extension';
+import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Constructor vacío
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log("Iniciando Seed...");
+  console.log("🌱 Iniciando Seed...");
 
-  // Limpiar base de datos
+  // Limpiar base de datos (orden inverso para evitar errores de llaves foráneas)
   await prisma.transaccion.deleteMany();
   await prisma.stream.deleteMany();
   await prisma.regalo.deleteMany();

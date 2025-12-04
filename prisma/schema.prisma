@@ -1,16 +1,12 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// backend/prisma/schema.prisma
 
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Usuario {
@@ -18,7 +14,7 @@ model Usuario {
   nombre          String
   email           String    @unique
   password        String
-  rol             String    
+  rol             String    // 'streamer' o 'espectador'
   monedas         Int       @default(100) 
   puntosXP        Int       @default(0)
   nivelEspectador Int       @default(1)
@@ -46,7 +42,7 @@ model Regalo {
   icono       String
   costo       Int
   puntos      Int
-  streamerId  Int?    
+  streamerId  Int?
   streamer    Usuario? @relation(fields: [streamerId], references: [id])
 }
 

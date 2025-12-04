@@ -12,7 +12,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@prisma/client": "^7.1.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
@@ -23,6 +22,7 @@
     "seed": "ts-node prisma/seed.ts"
   },
   "devDependencies": {
+    "@prisma/client": "^5.22.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.19",
     "@types/dotenv": "^6.1.1",
@@ -31,7 +31,7 @@
     "@types/node": "^24.10.1",
     "@types/nodemon": "^1.19.6",
     "nodemon": "^3.1.11",
-    "prisma": "^7.1.0",
+    "prisma": "^5.22.0",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3"
