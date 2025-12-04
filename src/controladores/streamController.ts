@@ -1,6 +1,11 @@
-// jhonp9/pw_otra_b/pw_otra_b-c8de98761eeb42f17684ef7afe1da3d572434c70/src/controladores/streamController.ts
+// backend/src/controladores/streamController.ts
+
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
+
+// Constantes para el tiempo
+const SEGUNDOS_PULSE = 30;
+const INCREMENTO_HORAS = SEGUNDOS_PULSE / 3600; // 0.008333...
 
 export const getStreams = async (req: Request, res: Response) => {
     const streamsActivos = await prisma.stream.findMany({
@@ -33,24 +38,23 @@ export const startStream = async (req: Request, res: Response) => {
     }
 };
 
-// NUEVO: Función que se llama cada 36 segundos (0.01 horas) desde el frontend
+// Se llama cada 30 segundos desde el frontend
 export const pulseStream = async (req: Request, res: Response) => {
     const { userId, streamId } = req.body;
     try {
         const stream = await prisma.stream.findUnique({ where: { id: Number(streamId) } });
         if (!stream || !stream.estaEnVivo) return res.status(400).json({ msg: 'Stream inactivo' });
 
-        // Sumar 0.01 horas (aprox 36 segundos)
-        const incremento = 0.01;
-        
+        // Actualizamos las horas
         const user = await prisma.usuario.update({
             where: { id: Number(userId) },
-            data: { horasStream: { increment: incremento } }
+            data: { horasStream: { increment: INCREMENTO_HORAS } }
         });
 
-        // Lógica de Nivel Streamer: Sube cada 0.01 horas acumuladas (REQ ESPECÍFICO)
-        // Nivel = Parte entera de horas / 0.01. Ejemplo: 0.02 horas = Nivel 3 (empieza en 1)
-        const nuevoNivel = Math.floor(user.horasStream / 0.01) + 1;
+        // Lógica de Nivel Streamer: Sube cada 30 segundos (INCREMENTO_HORAS)
+        // Fórmula: (Horas Totales / Horas por Nivel) + 1
+        // Usamos Math.floor para obtener el nivel entero.
+        const nuevoNivel = Math.floor(user.horasStream / INCREMENTO_HORAS) + 1;
         let subioNivel = false;
 
         if (nuevoNivel > user.nivelStreamer) {
@@ -74,7 +78,6 @@ export const stopStream = async (req: Request, res: Response) => {
             where: { id: Number(streamId) },
             data: { estaEnVivo: false, fin: new Date() }
         });
-        // Ya no calculamos horas aquí porque el 'pulse' lo hace en tiempo real
         res.json({ msg: 'Stream finalizado' });
     } catch (error) {
         res.status(500).json({ msg: 'Error deteniendo stream' });
