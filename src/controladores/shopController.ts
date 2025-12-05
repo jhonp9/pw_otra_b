@@ -101,21 +101,21 @@ export const enviarRegalo = async (req: Request, res: Response) => {
 
 // CAMBIO CLAVE: Usar lastId en vez de tiempo para mayor precisión
 export const getMisEventos = async (req: Request, res: Response) => {
-    const { userId } = req.body; 
-    const { lastId } = req.query; // Recibimos el último ID que el frontend conoce
+    const { userId } = req.body; // Viene del token
+    const { lastId } = req.query; // El último ID que el frontend tiene
 
     try {
         const idLimit = Number(lastId) || 0;
 
         const eventos = await prisma.transaccion.findMany({
             where: {
-                destinatarioId: Number(userId),
+                destinatarioId: Number(userId), // Solo lo que yo recibo
                 tipo: 'envio_regalo',
                 id: {
                     gt: idLimit // Traer solo eventos NUEVOS (ID mayor al último visto)
                 }
             },
-            orderBy: { id: 'asc' } // Ordenar por ID para procesar en orden
+            orderBy: { id: 'asc' } // Orden cronológico
         });
         res.json(eventos);
     } catch (error) {
