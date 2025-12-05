@@ -1,8 +1,7 @@
-// jhonp9/pw_otra_b/pw_otra_b-4bcaef2a4703ca2b1e2c1733d163516ac5905278/src/controladores/streamController.ts
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 
-// Usamos 10 segundos para el pulso, pero el cálculo final será exacto al milisegundo
+// Usamos 10 segundos para el pulso
 const SEGUNDOS_PULSE = 10;
 const INCREMENTO_HORAS = SEGUNDOS_PULSE / 3600; 
 // Regla: 30 segundos para subir de nivel (0.008333... horas)
@@ -19,7 +18,6 @@ export const getStreams = async (req: Request, res: Response) => {
 export const startStream = async (req: Request, res: Response) => {
     const { userId, titulo, categoria } = req.body;
     try {
-        // Cerrar streams colgados anteriores
         await prisma.stream.updateMany({
             where: { usuarioId: Number(userId), estaEnVivo: true },
             data: { estaEnVivo: false, fin: new Date() }
@@ -32,7 +30,7 @@ export const startStream = async (req: Request, res: Response) => {
                 categoria: categoria || 'General',
                 estaEnVivo: true,
                 inicio: new Date(),
-                tiempoAcumulado: 0.0 // Iniciamos en 0
+                tiempoAcumulado: 0.0 
             }
         });
         res.json({ msg: 'Stream iniciado', streamId: stream.id, inicio: stream.inicio });
@@ -47,7 +45,7 @@ export const pulseStream = async (req: Request, res: Response) => {
         const stream = await prisma.stream.findUnique({ where: { id: Number(streamId) } });
         if (!stream || !stream.estaEnVivo) return res.status(400).json({ msg: 'Stream inactivo' });
 
-        // 1. Sumamos el incremento al USUARIO y al registro del STREAM
+        // 1. Sumamos el incremento al registro del STREAM y al USUARIO (Tiempo Total)
         const [updatedStream, updatedUser] = await prisma.$transaction([
             prisma.stream.update({
                 where: { id: Number(streamId) },
@@ -59,10 +57,14 @@ export const pulseStream = async (req: Request, res: Response) => {
             })
         ]);
 
-        // 2. Cálculo de Nivel (Cada 30 seg)
-        const nuevoNivel = Math.floor(updatedUser.horasStream / META_HORAS_NIVEL) + 1;
+        // 2. Cálculo de Nivel basado en TIEMPO TOTAL ACUMULADO (updatedUser.horasStream)
+        // Usamos una pequeña tolerancia (epsilon) para evitar errores de punto flotante
+        const epsilon = 0.00001; 
+        const nuevoNivel = Math.floor((updatedUser.horasStream + epsilon) / META_HORAS_NIVEL) + 1;
         
         let subioNivel = false;
+        
+        // Verificamos contra el nivel que tiene guardado en base de datos
         if (nuevoNivel > updatedUser.nivelStreamer) {
             await prisma.usuario.update({
                 where: { id: Number(userId) },
@@ -71,7 +73,12 @@ export const pulseStream = async (req: Request, res: Response) => {
             subioNivel = true;
         }
 
-        res.json({ ok: true, horas: updatedUser.horasStream, subioNivel, nivel: nuevoNivel });
+        res.json({ 
+            ok: true, 
+            horasTotales: updatedUser.horasStream, // Enviamos el total acumulado
+            subioNivel, 
+            nivel: nuevoNivel 
+        });
     } catch (error) {
         console.error(error);
         res.status(500).json({ msg: 'Error en pulse' });
@@ -85,17 +92,13 @@ export const stopStream = async (req: Request, res: Response) => {
         if (!stream || !stream.inicio) return res.status(400).json({ msg: 'Stream inválido' });
 
         const fin = new Date();
-        
-        // 1. Calcular duración REAL total (en horas)
         const diffMs = fin.getTime() - new Date(stream.inicio).getTime();
         const horasTotalesReales = diffMs / (1000 * 60 * 60);
 
-        // 2. Calcular cuánto falta sumar (Real - Lo que ya sumamos por pulsos)
-        // Esto maneja streams de 10s (donde tiempoAcumulado es 0) o streams largos con remanente.
+        // Ajuste final preciso
         let faltante = horasTotalesReales - stream.tiempoAcumulado;
-        if (faltante < 0) faltante = 0; // Por seguridad
+        if (faltante < 0) faltante = 0; 
 
-        // 3. Actualizar Usuario (sumar el faltante) y cerrar Stream
         await prisma.usuario.update({
             where: { id: Number(userId) },
             data: { horasStream: { increment: faltante } }
@@ -105,18 +108,6 @@ export const stopStream = async (req: Request, res: Response) => {
             where: { id: Number(streamId) },
             data: { estaEnVivo: false, fin: fin, tiempoAcumulado: horasTotalesReales }
         });
-
-        // Verificamos nivel una última vez al cerrar
-        const userFinal = await prisma.usuario.findUnique({ where: { id: Number(userId) } });
-        if (userFinal) {
-             const nivelFinal = Math.floor(userFinal.horasStream / META_HORAS_NIVEL) + 1;
-             if (nivelFinal > userFinal.nivelStreamer) {
-                 await prisma.usuario.update({
-                     where: { id: Number(userId) },
-                     data: { nivelStreamer: nivelFinal }
-                 });
-             }
-        }
 
         res.json({ msg: 'Stream finalizado con precisión' });
     } catch (error) {
