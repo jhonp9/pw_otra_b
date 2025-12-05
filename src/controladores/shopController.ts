@@ -87,7 +87,7 @@ export const enviarRegalo = async (req: Request, res: Response) => {
                 destinatarioId: streamerId ? Number(streamerId) : null,
                 monto: -regalo.costo, 
                 tipo: 'envio_regalo', 
-                detalle: `¡${viewer.nombre} envió ${regalo.nombre} ${regalo.icono} (+${regalo.puntos} XP)!` 
+                detalle: `envió ${regalo.nombre} ${regalo.icono}` // Simplificamos el detalle, ya que el frontend armará el mensaje
             }
         });
 
@@ -99,23 +99,29 @@ export const enviarRegalo = async (req: Request, res: Response) => {
     }
 };
 
-// CAMBIO CLAVE: Usar lastId en vez de tiempo para mayor precisión
+// CAMBIO CLAVE: Incluir datos del emisor (usuario)
 export const getMisEventos = async (req: Request, res: Response) => {
-    const { userId } = req.body; // Viene del token
-    const { lastId } = req.query; // El último ID que el frontend tiene
+    // En peticiones GET, req.body puede ser inestable. Usamos query como fallback o el req.body inyectado por middleware.
+    const userId = req.body.userId || req.query.userId; 
+    const { lastId } = req.query; 
+
+    if (!userId) return res.status(400).json([]);
 
     try {
         const idLimit = Number(lastId) || 0;
 
         const eventos = await prisma.transaccion.findMany({
             where: {
-                destinatarioId: Number(userId), // Solo lo que yo recibo
+                destinatarioId: Number(userId), // Solo lo que yo (Streamer) recibo
                 tipo: 'envio_regalo',
                 id: {
-                    gt: idLimit // Traer solo eventos NUEVOS (ID mayor al último visto)
+                    gt: idLimit // Traer solo eventos NUEVOS
                 }
             },
-            orderBy: { id: 'asc' } // Orden cronológico
+            include: {
+                usuario: { select: { nombre: true, nivelEspectador: true } } // <--- ESTO ES VITAL: Traemos el nombre del espectador
+            },
+            orderBy: { id: 'asc' } 
         });
         res.json(eventos);
     } catch (error) {
