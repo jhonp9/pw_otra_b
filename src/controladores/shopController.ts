@@ -1,3 +1,4 @@
+// jhonp9/pw_otra_b/pw_otra_b-4bcaef2a4703ca2b1e2c1733d163516ac5905278/src/controladores/shopController.ts
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { calcularNuevoNivel } from './userController'; 
@@ -60,7 +61,6 @@ export const enviarRegalo = async (req: Request, res: Response) => {
         if (!viewer || !regalo) return res.status(404).json({ msg: 'Datos incorrectos' });
         if (viewer.monedas < regalo.costo) return res.status(400).json({ msg: 'Saldo insuficiente' });
 
-        // 1. Descontar monedas y sumar XP al espectador
         const updatedUser = await prisma.usuario.update({
             where: { id: viewerId },
             data: {
@@ -69,7 +69,6 @@ export const enviarRegalo = async (req: Request, res: Response) => {
             }
         });
 
-        // 2. Calcular si el espectador sube de nivel (usando config del streamer)
         const configNiveles = streamer?.configNiveles || "{}";
         const nuevoNivel = calcularNuevoNivel(updatedUser.puntosXP, viewer.nivelEspectador, configNiveles);
         
@@ -82,7 +81,6 @@ export const enviarRegalo = async (req: Request, res: Response) => {
             subioNivel = true;
         }
 
-        // 3. Registrar transacción (IMPORTANTE: Guardar destinatarioId para el overlay)
         await prisma.transaccion.create({
             data: { 
                 usuarioId: viewerId, 
@@ -101,27 +99,23 @@ export const enviarRegalo = async (req: Request, res: Response) => {
     }
 };
 
-// Endpoint para que el Streamer consulte si recibió regalos recientemente
+// CAMBIO CLAVE: Usar lastId en vez de tiempo para mayor precisión
 export const getMisEventos = async (req: Request, res: Response) => {
     const { userId } = req.body; 
-    const { since } = req.query; 
+    const { lastId } = req.query; // Recibimos el último ID que el frontend conoce
 
     try {
-        // Usamos un fallback seguro: si no envían 'since', buscamos eventos de los últimos 5 segundos
-        const timestamp = Number(since);
-        const fechaCorte = (!isNaN(timestamp) && timestamp > 0) 
-            ? new Date(timestamp) 
-            : new Date(Date.now() - 5000);
+        const idLimit = Number(lastId) || 0;
 
         const eventos = await prisma.transaccion.findMany({
             where: {
                 destinatarioId: Number(userId),
                 tipo: 'envio_regalo',
-                fecha: {
-                    gt: fechaCorte 
+                id: {
+                    gt: idLimit // Traer solo eventos NUEVOS (ID mayor al último visto)
                 }
             },
-            orderBy: { fecha: 'asc' }
+            orderBy: { id: 'asc' } // Ordenar por ID para procesar en orden
         });
         res.json(eventos);
     } catch (error) {
